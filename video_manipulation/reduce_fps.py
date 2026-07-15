@@ -1,3 +1,7 @@
+#python video_manipulation/reduce_fps.py raw_videos/EQE_01.MP4 --fps 30
+#Use the line above to reduce the frame rate of a video, you can adjust the number.
+
+
 import argparse
 import subprocess
 import sys
