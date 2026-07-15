@@ -20,3 +20,14 @@ def reduce_fps(input_path: Path, output_path: Path, fps: int, crf: int):
         str(output_path),
     ]
 
+ print("Running command:")
+    print(" ".join(cmd))
+    print()
+
+result = subprocess.run(cmd)
+ 
+    if result.returncode != 0:
+        print("\nffmpeg reported an error. See output above for details.")
+        sys.exit(result.returncode)
+ 
+    print(f"\nDone. Output saved to: {output_path}")
