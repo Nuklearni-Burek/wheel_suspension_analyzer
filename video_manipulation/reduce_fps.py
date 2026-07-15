@@ -6,3 +6,17 @@ from pathlib import Path
 
 def build_output_path(input_path: Path, target_fps: int) -> Path:
     return input_path.with_name(f"{input_path.stem}_{target_fps}fps{input_path.suffix}")
+
+def reduce_fps(input_path: Path, output_path: Path, fps: int, crf: int):
+    cmd = [
+        "ffmpeg",
+        "-y",                      # overwrite output if it exists
+        "-i", str(input_path),
+        "-r", str(fps),            # target frame rate (keeps duration the same)
+        "-c:v", "libx264",
+        "-crf", str(crf),          # quality: lower = better quality, bigger file (18-23 typical)
+        "-preset", "medium",
+        "-c:a", "copy",            # keep audio as-is
+        str(output_path),
+    ]
+
