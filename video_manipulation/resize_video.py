@@ -1,3 +1,5 @@
+#python video_manipulation/resize_video.py raw_videos/EQE_01_30fps.MP4 --scale 0.5
+#You can manipulate the scale, adjust number however you want. You can also use --width or --height to specify exact dimensions instead of a scale factor.
 
 
 import argparse
