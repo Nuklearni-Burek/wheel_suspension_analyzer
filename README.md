@@ -6,6 +6,12 @@ through an automated pipeline (FPS reduction → resize → lens distortion
 correction → YOLO wheel detection/tracking) to measure wheel-well clearance
 per frame, then plots the result as a graph.
 
+
+![GUI of wheel suspension](GUI_wheel_suspension.png)
+![Suspension plot](postprocess_GUI.png)
+![example](3.png)
+
+
 ## Requirements
 
 - Python 3.9+
