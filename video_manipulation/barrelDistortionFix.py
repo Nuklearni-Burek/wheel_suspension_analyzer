@@ -13,7 +13,7 @@ def undistort_video(video_path):
         return
 
     base_name = os.path.basename(video_path)
-    output_name = f"undistorted_{base_name}"
+    output_name = os.path.join(os.path.dirname(video_path), f"undistorted_{base_name}")
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Processing: {base_name}")
     print(f"--> Output target: {output_name}")
 
