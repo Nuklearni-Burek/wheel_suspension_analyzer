@@ -1,3 +1,5 @@
+#run as python detect_build_WheelCsv.py video.MP4
+
 import os
 import sys
 import cv2
@@ -180,10 +182,10 @@ if __name__ == "__main__":
     print("Loading YOLO Wheel Model...")
     wheel_model = YOLO("video_manipulation/yolov11nWheel.pt")
 
+    video_dir = os.path.dirname(video) or "."
     video_name, _ = os.path.splitext(os.path.basename(video))
-
-    # Avoid re-processing output directories if the script runs multiple times
-    output_dir = f"{video_name}_output"
+    output_dir = os.path.join(video_dir, f"{video_name}_output")
+    
     os.makedirs(output_dir, exist_ok=True)
 
     output_video = os.path.join(output_dir, f"{video_name}_tracked.avi")
