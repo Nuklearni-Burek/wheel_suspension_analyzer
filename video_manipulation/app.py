@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QSpinBox,
     QPlainTextEdit,
+    QCheckBox,
 )
 
 
@@ -35,11 +36,12 @@ class PipelineWorker(QThread):
     finished_ok = Signal(str)   # emits path to final CSV
     finished_err = Signal(str)  # emits error message
 
-    def __init__(self, video_path, fps, scale):
+    def __init__(self, video_path, fps, scale, skip_fps=False):
         super().__init__()
         self.video_path = video_path
         self.fps = fps
         self.scale = scale
+        self.skip_fps = skip_fps
 
     def run_script(self, script_name, args):
         """Runs one script via subprocess, streaming stdout/stderr to the log."""
@@ -66,23 +68,28 @@ class PipelineWorker(QThread):
             base, ext = os.path.splitext(os.path.basename(video))
             in_dir = os.path.dirname(video) or "."
 
-            # --- Step 1: reduce_fps.py ---
-            self.log_message.emit("Step 1/4: Reducing FPS...")
-            fps_output = os.path.join(in_dir, f"{base}_{self.fps}fps{ext}")
-            self.run_script(
-                "reduce_fps.py",
-                [video, "--fps", str(self.fps)],
-            )
-            if not os.path.isfile(fps_output):
-                raise RuntimeError(
-                    f"Expected output not found: {fps_output}\n"
-                    "Check the naming convention used by reduce_fps.py."
+            # --- Step 1: reduce_fps.py (optional) ---
+            if self.skip_fps:
+                self.log_message.emit("Step 1/4: Skipped (using original FPS).")
+                fps_output = video
+            else:
+                self.log_message.emit("Step 1/4: Reducing FPS...")
+                fps_output = os.path.join(in_dir, f"{base}_{self.fps}fps{ext}")
+                self.run_script(
+                    "reduce_fps.py",
+                    [video, "--fps", str(self.fps)],
                 )
+                if not os.path.isfile(fps_output):
+                    raise RuntimeError(
+                        f"Expected output not found: {fps_output}\n"
+                        "Check the naming convention used by reduce_fps.py."
+                    )
 
             # --- Step 2: resize_video.py ---
             self.log_message.emit("Step 2/4: Resizing video...")
+            fps_base = os.path.splitext(os.path.basename(fps_output))[0]
             resized_output = os.path.join(
-                in_dir, f"{base}_{self.fps}fps_resized{ext}"
+                os.path.dirname(fps_output), f"{fps_base}_resized{ext}"
             )
             self.run_script(
                 "resize_video.py",
@@ -97,7 +104,10 @@ class PipelineWorker(QThread):
             # --- Step 3: barrelDistortionFix.py ---
             self.log_message.emit("Step 3/4: Correcting lens distortion...")
             undistorted_name = f"undistorted_{os.path.basename(resized_output)}"
-            undistorted_output = os.path.join(in_dir, undistorted_name)
+            # barrelDistortionFix.py writes next to the input video.
+            undistorted_output = os.path.join(
+                os.path.dirname(resized_output), undistorted_name
+            )
             self.run_script(
                 "barrelDistortionFix.py",
                 [resized_output],
@@ -119,7 +129,8 @@ class PipelineWorker(QThread):
                 os.path.basename(undistorted_output)
             )
             output_dir = os.path.join(
-                in_dir, f"{undistorted_base}_output"
+                os.path.dirname(undistorted_output),
+                f"{undistorted_base}_output",
             )
             csv_path = os.path.join(
                 output_dir, f"{undistorted_base}_telemetry.csv"
@@ -131,6 +142,24 @@ class PipelineWorker(QThread):
                 )
 
             self.log_message.emit("Pipeline complete.")
+
+            # --- Cleanup: remove intermediate files, keep only the final ---
+            # (undistorted video) and the CSV. Original input video is untouched.
+            self.log_message.emit("Cleaning up intermediate files...")
+            intermediates = [resized_output]
+            if not self.skip_fps:
+                intermediates.append(fps_output)
+            for intermediate in intermediates:
+                try:
+                    if os.path.isfile(intermediate) and intermediate != self.video_path:
+                        os.remove(intermediate)
+                        self.log_message.emit(f"Removed: {intermediate}")
+                except OSError as e:
+                    # Don't fail the whole pipeline over a cleanup issue
+                    self.log_message.emit(
+                        f"Warning: could not remove {intermediate}: {e}"
+                    )
+
             self.finished_ok.emit(csv_path)
 
         except Exception as e:
@@ -167,6 +196,12 @@ class MainWindow(QMainWindow):
         self.fps_input.setRange(1, 240)
         self.fps_input.setValue(30)
         params_row.addWidget(self.fps_input)
+
+        self.skip_fps_checkbox = QCheckBox("Skip FPS reduction")
+        self.skip_fps_checkbox.toggled.connect(
+            lambda checked: self.fps_input.setDisabled(checked)
+        )
+        params_row.addWidget(self.skip_fps_checkbox)
 
         params_row.addWidget(QLabel("Scale:"))
         self.scale_input = QDoubleSpinBox()
@@ -225,8 +260,9 @@ class MainWindow(QMainWindow):
 
         fps = self.fps_input.value()
         scale = self.scale_input.value()
+        skip_fps = self.skip_fps_checkbox.isChecked()
 
-        self.worker = PipelineWorker(self.video_path, fps, scale)
+        self.worker = PipelineWorker(self.video_path, fps, scale, skip_fps=skip_fps)
         self.worker.log_message.connect(self.append_log)
         self.worker.finished_ok.connect(self.on_pipeline_done)
         self.worker.finished_err.connect(self.on_pipeline_error)
